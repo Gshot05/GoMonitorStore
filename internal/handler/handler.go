@@ -1,8 +1,12 @@
+// internal/handler/handler.go
+
 package handler
 
 import (
 	"encoding/json"
+	"log"
 	"myapp/internal/auth"
+	"myapp/internal/models"
 	"myapp/internal/service"
 	"net/http"
 )
@@ -26,11 +30,7 @@ func NewHandler(
 }
 
 func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		Username string `json:"username"`
-		Password string `json:"password"`
-		Email    string `json:"email"`
-	}
+	var req models.UserRegisterRequest
 	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
 		http.Error(w, "Invalid request", http.StatusBadRequest)
@@ -47,10 +47,7 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		Username string `json:"username"`
-		Password string `json:"password"`
-	}
+	var req models.UserLoginRequest
 	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
 		http.Error(w, "Invalid request", http.StatusBadRequest)
@@ -71,15 +68,15 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) AddDisplay(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		Diagonal   float64 `json:"diagonal"`
-		Resolution string  `json:"resolution"`
-		Type       string  `json:"type"`
-		Gsync      bool    `json:"gsync"`
-	}
+	var req models.DisplayRequest
 	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
 		http.Error(w, "Invalid request", http.StatusBadRequest)
+		return
+	}
+
+	if req.Diagonal <= 0 || req.Resolution == "" || req.Type == "" {
+		http.Error(w, "All fields are required and must be valid", http.StatusBadRequest)
 		return
 	}
 
@@ -93,20 +90,24 @@ func (h *Handler) AddDisplay(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) AddMonitor(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		Voltage   float64 `json:"voltage"`
-		GsyncPrem bool    `json:"gsync_prem"`
-		Curved    bool    `json:"curved"`
-		DisplayID int64   `json:"display_id"`
-	}
+	var req models.MonitorRequest
+
 	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
 		http.Error(w, "Invalid request: unable to decode JSON", http.StatusBadRequest)
+		log.Printf("Decode error: %v", err)
+		return
+	}
+
+	if req.Voltage <= 0 || req.DisplayID <= 0 {
+		http.Error(w, "All fields are required and must be valid", http.StatusBadRequest)
+		log.Printf("Validation error: Voltage=%f, DisplayID=%d", req.Voltage, req.DisplayID)
 		return
 	}
 
 	err = h.monitorService.AddMonitorWithDisplayID(req.Voltage, req.GsyncPrem, req.Curved, req.DisplayID)
 	if err != nil {
+		log.Printf("Error adding monitor: %v", err)
 		http.Error(w, "Error adding monitor", http.StatusInternalServerError)
 		return
 	}
